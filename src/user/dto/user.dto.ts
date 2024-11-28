@@ -1,55 +1,40 @@
-import {
-  IsNotEmpty,
-  IsEmail,
-  IsString,
-  Matches,
-  MinLength,
-  MaxLength,
-  IsPhoneNumber,
-  IsOptional
-} from "class-validator";
+import { IsOptional, IsString, IsNumber, IsObject } from "class-validator";
+import { ApiProperty } from "@nestjs/swagger";
 
 export class UserDto {
+  @ApiProperty({ description: "Filters to apply on the user data", required: false, type: Object })
+  @IsOptional()
+  @IsObject()
+  filters?: object;
+
+  @ApiProperty({ description: "Current page number for pagination", required: false, example: 1 })
+  @IsOptional()
+  @IsNumber()
+  page?: number;
+
+  @ApiProperty({ description: "Number of records per page", required: false, example: 10 })
+  @IsOptional()
+  @IsNumber()
+  limit?: number;
+
+  @ApiProperty({ description: "Search query string", required: false, example: "John" })
   @IsOptional()
   @IsString()
+  search?: string;
+}
+export class UserDetailsDto {
+  @ApiProperty({ description: "Unique identifier of the user", required: false, type: String })
+  @IsOptional()
   id?: string;
+}
+export class UploadUserProfileImageDto {
+  @ApiProperty({ description: "Unique identifier of the user", required: false, type: String })
   @IsOptional()
-  @IsString()
-  fullName?: string;
-
+  id: string;
+}
+export class uploadDoucumentDto {
+  [x: string]: any;
+  @ApiProperty({ description: "Unique identifier of the user", required: false, type: String })
   @IsOptional()
-  @IsString()
-  profileImage?: string;
-
-  @IsString()
-  @Matches(/^[a-zA-Z0-9]{6,}$/, {
-    message: "Username must be at least six characters long and contain only letters and numbers"
-  })
-  userName?: string;
-
-  @IsNotEmpty({ message: "Email is required" })
-  @IsEmail({}, { message: "Invalid email format" })
-  email?: string;
-
-  @MinLength(8, { message: "Password must be at least 8 characters" })
-  @MaxLength(16, { message: "Password must not exceed 16 characters" })
-  @Matches(/[A-Z]/, {
-    message: "Password must contain at least one uppercase letter"
-  })
-  @Matches(/\d/, {
-    message: "Password must contain at least one numeric character"
-  })
-  @Matches(/[\W_]/, {
-    message: "Password must contain at least one special character"
-  })
-  password?: string;
-
-  @IsString()
-  @IsPhoneNumber(null, {
-    message: "Phone number must include country code"
-  })
-  @Matches(/^\+?\d{5,16}$/, {
-    message: "Phone number must be 5-16 digits including country code"
-  })
-  phoneNumber?: string;
+  id: string;
 }

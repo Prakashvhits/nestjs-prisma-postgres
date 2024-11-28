@@ -1,37 +1,42 @@
-import { Controller, Post, Body } from "@nestjs/common";
+import { Controller, Post, Body, HttpStatus, HttpCode } from "@nestjs/common";
 import { AuthenticationService } from "./authentication.service";
-import { RegisterUserDto } from "./dto/create-authentication.dto";
+import { LoginDto, RefreshTokenDto, RegisterUserDto } from "./dto/create-authentication.dto";
+import { ApiBody, ApiOperation, ApiResponse } from "@nestjs/swagger";
 
 @Controller("authentication")
 export class AuthenticationController {
   constructor(private readonly authenticationService: AuthenticationService) {}
 
   @Post("createAndUpdate")
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: "Create a new user" })
+  @ApiResponse({ status: 201, description: "User created successfully" })
+  @ApiResponse({ status: 400, description: "Bad request" })
   create(@Body() createAuthenticationDto: RegisterUserDto) {
     return this.authenticationService.createUser(createAuthenticationDto);
   }
   @Post("login")
-  loginUser(@Body() loginInput: { identifier: string; password: string }) {
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Login a user" })
+  @ApiBody({
+    description: "User login credentials",
+    type: LoginDto // Define a DTO (Data Transfer Object) to specify the structure
+  })
+  @ApiResponse({ status: HttpStatus.OK, description: "User logged in successfully" })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: "Username or password is incorrect" })
+  loginUser(@Body() loginInput: LoginDto) {
     return this.authenticationService.loginUser(loginInput);
   }
-
-  // @Get()
-  // findAll() {
-  //   return this.authenticationService.findAll();
-  // }
-
-  // @Get(":id")
-  // findOne(@Param("id") id: string) {
-  //   return this.authenticationService.findOne(+id);
-  // }
-
-  // @Patch(":id")
-  // update(@Param("id") id: string, @Body() updateAuthenticationDto: UpdateAuthenticationDto) {
-  //   return this.authenticationService.update(+id, updateAuthenticationDto);
-  // }
-
-  // @Delete(":id")
-  // remove(@Param("id") id: string) {
-  //   return this.authenticationService.remove(+id);
-  // }
+  @Post("refresh-token")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Refresh access token" })
+  @ApiBody({
+    description: "Refresh token",
+    type: RefreshTokenDto
+  })
+  @ApiResponse({ status: HttpStatus.OK, description: "Access token refreshed successfully" })
+  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: "Invalid refresh token" })
+  refreshTokens(@Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authenticationService.refreshTokens(refreshTokenDto.refreshToken);
+  }
 }
