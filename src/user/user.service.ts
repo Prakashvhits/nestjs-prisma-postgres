@@ -1,6 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { UserDto } from "./dto/user.dto";
+// import * as sharp from "sharp"
 
 @Injectable()
 export class UserService {
@@ -69,7 +70,6 @@ export class UserService {
       if (!user) {
         throw new HttpException("User not found.", HttpStatus.NOT_FOUND);
       }
-      console.log(profileImage, id);
 
       const updatedUser = await this.prisma.user.update({
         where: { id: id },
@@ -87,12 +87,12 @@ export class UserService {
   }
 
   async UploadDocument(documents: { userId: string; title: string; filename: string; username: string }[]) {
-    return await this.prisma.document.createMany({
+       return await this.prisma.document.createMany({
       data: documents.map(doc => ({
         userId: doc.userId,
         title: doc.title,
         filename: doc.filename,
-        username: doc.username
+        userName: doc.username
       }))
     });
   }

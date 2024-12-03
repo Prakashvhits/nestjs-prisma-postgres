@@ -1,6 +1,6 @@
 import { Injectable, HttpException, HttpStatus } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service"; // Replace with your PrismaService path
-import { LoginDto, RegisterUserDto } from "./dto/create-authentication.dto"; // Replace with the actual path to your DTO
+import { LoginDto, RegisterUserDto, ResetPasswordDto } from "./dto/create-authentication.dto"; // Replace with the actual path to your DTO
 import { JwtService } from "@nestjs/jwt";
 import { comparePassword, hashPassword } from "src/utils/common.services";
 
@@ -135,26 +135,19 @@ export class AuthenticationService {
     }
 
     // Generate access and refresh tokens
-    const tokens = await this.generateTokens(user.id);
-    // await this.prisma.user.update({
-    //   where: { id: user.id },
-    //   data: {
-    //     refreshToken: tokens.refreshToken
-    //     accessToken: tokens.accessToken
-    //   }
-    // })
-    return { ...tokens };
+    const { accessToken, refreshToken } = await this.generateTokens(user.id);
+    return { accessToken, refreshToken };
   }
 
   private async generateTokens(userId: string) {
     const payload = { userId };
 
-    const accessToken = await this.jwtService.sign(payload, {
+    const accessToken = this.jwtService.sign(payload, {
       secret: process.env.JWT_ACCESS_SECRET,
-      expiresIn: "15m"
+      expiresIn: "1d"
     });
 
-    const refreshToken = await this.jwtService.sign(payload, {
+    const refreshToken = this.jwtService.sign(payload, {
       secret: process.env.JWT_REFRESH_SECRET,
       expiresIn: "7d"
     });
@@ -198,4 +191,29 @@ export class AuthenticationService {
   //     throw new HttpException("Invalid token." + error, HttpStatus.UNAUTHORIZED);
   //   }
   // }
+
+  async resetPassword(resetPasswordInput: ResetPasswordDto): Promise<any> {
+    const { identifier, password } = resetPasswordInput;
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ email: identifier }, { userName: identifier }, { phoneNumber: identifier }]
+      }
+    });
+    if (!user) {
+      throw new HttpException("User not found.", HttpStatus.NOT_FOUND);
+    }
+    const isPasswordMatch = await comparePassword(password, user.password);
+    if (isPasswordMatch) {
+      throw new HttpException("New password cannot be the same as the old password.", HttpStatus.BAD_REQUEST);
+    }
+    const encryptedPassword = await hashPassword(password);
+
+    return this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: encryptedPassword
+      }
+    });
+  }
 }

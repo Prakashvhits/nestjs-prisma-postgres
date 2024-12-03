@@ -2,8 +2,10 @@ import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { ValidationPipe } from "@nestjs/common";
-import { join } from "path";
+import * as path from "path";
+import * as express from "express";
 import { NestExpressApplication } from "@nestjs/platform-express";
+import { existsSync, mkdirSync } from "fs";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -19,10 +21,14 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   app.useGlobalPipes(new ValidationPipe());
   SwaggerModule.setup("api", app, document);
-
-  app.useStaticAssets(join(__dirname, "..", "uploads"), {
-    prefix: "/uploads/"
-  });
+  const uploadDir = path.join(process.cwd(), "uploads");
+  if (!existsSync(uploadDir)) {
+    mkdirSync(uploadDir, { recursive: true });
+  }
+  // app.useStaticAssets(join(__dirname, "..", "uploads"), {
+  //   prefix: "/uploads/"
+  // });
+  app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();

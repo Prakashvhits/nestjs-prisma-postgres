@@ -8,18 +8,28 @@ import {
   HttpStatus,
   Post,
   Query,
+  Req,
   UploadedFile,
+  UploadedFiles,
   UseInterceptors
 } from "@nestjs/common";
 import { UserService } from "./user.service";
 import { uploadDoucumentDto, UploadUserProfileImageDto, UserDto } from "./dto/user.dto";
-import { ApiBody, ApiConsumes, ApiOperation, ApiResponse } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse } from "@nestjs/swagger";
 import { AnyFilesInterceptor, FileInterceptor } from "@nestjs/platform-express";
 import * as multer from "multer";
-import { extname } from "path";
+import * as path from "path";
+import * as sharp from "sharp";
+import * as fs from "fs";
+// import * as jwt from "jsonwebtoken";
+import { Request } from 'express';
+import * as dotenv from "dotenv";
+import { decodeToken, extractTokenFromHeader } from "src/utils/common.services";
 
+dotenv.config();
 @Controller("user")
 export class UserController {
+  [x: string]: any;
   constructor(private userService: UserService) {}
 
   @Post("get_all_user_details")
@@ -61,6 +71,7 @@ export class UserController {
     }
   }
   @Post("upload_profile_image")
+  @ApiBearerAuth()
   @ApiConsumes("multipart/form-data")
   @ApiOperation({ summary: "Upload profile image" })
   @ApiResponse({ status: 200, description: "Profile image uploaded successfully" })
@@ -84,7 +95,7 @@ export class UserController {
         destination: "./uploads",
         filename: (req, file, callback) => {
           const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 999999);
-          callback(null, `${uniqueSuffix}${extname(file.originalname)}`);
+          callback(null, `${uniqueSuffix}${path.extname(file.originalname)}`);
         }
       }),
       fileFilter: (req, file, callback) => {
@@ -96,21 +107,66 @@ export class UserController {
       limits: { fileSize: 5 * 1024 * 1024 }
     })
   )
-  async uploadProfileImage(@Body() body: UploadUserProfileImageDto, @UploadedFile() file: Express.Multer.File) {
+  async uploadProfileImage(@Body() body: UploadUserProfileImageDto, @Req() req: Request, @UploadedFile() file: Express.Multer.File) {
     try {
       if (!file) {
         throw new HttpException("No file uploaded.", HttpStatus.BAD_REQUEST);
       }
+      const outputDir = path.join(process.cwd(), "uploads");
+      const filePath = path.join(outputDir, file.filename);
       const filename = file.filename;
-      const id = body.id;
+      // const compressedImageBuffer = await sharp(file.path).resize(200, 200).toBuffer();
+      const compressedImageBuffer = await this.compressImageToMaxSize(file.path, 250 * 1024);
+      fs.writeFileSync(filePath, compressedImageBuffer);
+      const token = extractTokenFromHeader(req);   
+      const decoded = decodeToken(token);
+        
+      const userId = decoded.userId;
+      const id = userId;
+      // const id = body.id;
       return await this.userService.uploadProfileImage(id, filename);
     } catch (error) {
+      console.log(error);
       throw new HttpException(
         { message: "Failed to upload profile image", error: error.message },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }
+
+  
+ 
+private async compressImageToMaxSize(filePath: string, maxSize: number): Promise<Buffer> {
+  let buffer = await sharp(filePath).toBuffer();
+  const metadata = await sharp(buffer).metadata(); 
+
+  if (!metadata.width || !metadata.height) {
+      throw new HttpException(
+          "Unable to read image dimensions.",
+          HttpStatus.BAD_REQUEST
+      );
+  }
+
+  let width = metadata.width; 
+
+  // Iteratively resize the image until it meets the size requirement
+  while (buffer.length > maxSize) {
+      width = Math.floor(width * 0.9); // Reduce width by 10%
+      buffer = await sharp(filePath)
+          .resize({ width })
+          .toBuffer(); 
+
+      // Stop resizing if width becomes unreasonably small
+      if (width < 100) {
+          throw new HttpException(
+              "Cannot reduce image to the desired size without significant quality loss.",
+              HttpStatus.BAD_REQUEST
+          );
+      }
+  }
+
+  return buffer;
+}
 
   @Post("upload_document")
   @ApiConsumes("multipart/form-data")
@@ -146,11 +202,11 @@ export class UserController {
         destination: "./uploads/documents",
         filename: (req, file, callback) => {
           const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 999999);
-          callback(null, `${uniqueSuffix}${extname(file.originalname)}`);
+          callback(null, `${uniqueSuffix}${path.extname(file.originalname)}`);
         }
       }),
       fileFilter: (req, file, callback) => {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|pdf|doc|docx)$/)) {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|pdf|doc|docx|XLS|XLSX)$/)) {
           return callback(new BadRequestException("Only image files are allowed!"), false);
         }
         callback(null, true);
@@ -158,8 +214,9 @@ export class UserController {
       limits: { fileSize: 5 * 1024 * 1024 }
     })
   )
-  async uploadDocument(@Body() body: uploadDoucumentDto, @UploadedFile() files: Express.Multer.File[]) {
+  async uploadDocument(@Body() body: uploadDoucumentDto, @UploadedFiles() files: Express.Multer.File[]) {
     try {
+      console.log(files, "files");
       if (!files) {
         throw new HttpException("No file uploaded.", HttpStatus.BAD_REQUEST);
       }
@@ -194,6 +251,7 @@ export class UserController {
       await this.userService.UploadDocument(documents);
       return { message: "Document uploaded successfully", data: documents };
     } catch (error) {
+      console.log(error);
       throw new HttpException(
         { message: "Failed to upload document", error: error.message },
         HttpStatus.INTERNAL_SERVER_ERROR
@@ -201,3 +259,7 @@ export class UserController {
     }
   }
 }
+
+
+
+

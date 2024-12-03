@@ -1,6 +1,6 @@
 import { Controller, Post, Body, HttpStatus, HttpCode } from "@nestjs/common";
 import { AuthenticationService } from "./authentication.service";
-import { LoginDto, RefreshTokenDto, RegisterUserDto } from "./dto/create-authentication.dto";
+import { LoginDto, RefreshTokenDto, RegisterUserDto, ResetPasswordDto } from "./dto/create-authentication.dto";
 import { ApiBody, ApiOperation, ApiResponse } from "@nestjs/swagger";
 
 @Controller("authentication")
@@ -38,5 +38,18 @@ export class AuthenticationController {
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: "Invalid refresh token" })
   refreshTokens(@Body() refreshTokenDto: RefreshTokenDto) {
     return this.authenticationService.refreshTokens(refreshTokenDto.refreshToken);
+  }
+
+  @Post("rest-password")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Reset password" })
+  @ApiBody({
+    description: "Reset password request",
+    type: ResetPasswordDto
+  })
+  @ApiResponse({ status: HttpStatus.OK, description: "Password reset successfully" })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: "Invalid reset password request" })
+  resetPassword(@Body() resetPasswordInput: ResetPasswordDto) {
+    return this.authenticationService.resetPassword(resetPasswordInput);
   }
 }

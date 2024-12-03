@@ -101,3 +101,11 @@ export class RefreshTokenDto {
   @ApiProperty({ description: "Access token" })
   accessToken: string;
 }
+
+export class ResetPasswordDto {
+  @ApiProperty({ description: "Email, username, or phone number" })
+  identifier: string;
+
+  @ApiProperty({ description: "New password" })
+  password: string;
+}
