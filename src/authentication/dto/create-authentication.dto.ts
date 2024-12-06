@@ -96,8 +96,10 @@ export class LoginDto {
   password: string;
 }
 export class RefreshTokenDto {
+  @IsOptional()
   @ApiProperty({ description: "Refresh token" })
   refreshToken: string;
+  @IsOptional()
   @ApiProperty({ description: "Access token" })
   accessToken: string;
 }

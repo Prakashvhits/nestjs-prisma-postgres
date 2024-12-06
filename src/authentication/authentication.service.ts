@@ -1,8 +1,9 @@
-import { Injectable, HttpException, HttpStatus } from "@nestjs/common";
+import { Injectable, HttpException, HttpStatus, Res } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service"; // Replace with your PrismaService path
 import { LoginDto, RegisterUserDto, ResetPasswordDto } from "./dto/create-authentication.dto"; // Replace with the actual path to your DTO
 import { JwtService } from "@nestjs/jwt";
 import { comparePassword, hashPassword } from "src/utils/common.services";
+import { Response } from "express";
 
 @Injectable()
 export class AuthenticationService {
@@ -115,7 +116,7 @@ export class AuthenticationService {
     });
   }
 
-  async loginUser(loginInput: LoginDto): Promise<any> {
+  async loginUser(loginInput: LoginDto, @Res() res: Response): Promise<any> {
     const { identifier, password } = loginInput;
 
     // Find user by email, username, or phone
@@ -136,15 +137,28 @@ export class AuthenticationService {
 
     // Generate access and refresh tokens
     const { accessToken, refreshToken } = await this.generateTokens(user.id);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { refreshToken }
+    });
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', 
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
+    // return { accessToken };
     return { accessToken, refreshToken };
   }
+  
 
   private async generateTokens(userId: string) {
     const payload = { userId };
 
     const accessToken = this.jwtService.sign(payload, {
       secret: process.env.JWT_ACCESS_SECRET,
-      expiresIn: "1d"
+      expiresIn: "1m"
     });
 
     const refreshToken = this.jwtService.sign(payload, {

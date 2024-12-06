@@ -19,12 +19,11 @@ import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse } from "
 import { AnyFilesInterceptor, FileInterceptor } from "@nestjs/platform-express";
 import * as multer from "multer";
 import * as path from "path";
-import * as sharp from "sharp";
 import * as fs from "fs";
 // import * as jwt from "jsonwebtoken";
 import { Request } from 'express';
 import * as dotenv from "dotenv";
-import { decodeToken, extractTokenFromHeader } from "src/utils/common.services";
+import { compressImageToMaxSize, decodeToken, extractTokenFromHeader } from "src/utils/common.services";
 
 dotenv.config();
 @Controller("user")
@@ -116,7 +115,7 @@ export class UserController {
       const filePath = path.join(outputDir, file.filename);
       const filename = file.filename;
       // const compressedImageBuffer = await sharp(file.path).resize(200, 200).toBuffer();
-      const compressedImageBuffer = await this.compressImageToMaxSize(file.path, 250 * 1024);
+      const compressedImageBuffer = await compressImageToMaxSize(file.path, 250 * 1024);
       fs.writeFileSync(filePath, compressedImageBuffer);
       const token = extractTokenFromHeader(req);   
       const decoded = decodeToken(token);
@@ -136,37 +135,37 @@ export class UserController {
 
   
  
-private async compressImageToMaxSize(filePath: string, maxSize: number): Promise<Buffer> {
-  let buffer = await sharp(filePath).toBuffer();
-  const metadata = await sharp(buffer).metadata(); 
+// private async compressImageToMaxSize(filePath: string, maxSize: number): Promise<Buffer> {
+//   let buffer = await sharp(filePath).toBuffer();
+//   const metadata = await sharp(buffer).metadata(); 
 
-  if (!metadata.width || !metadata.height) {
-      throw new HttpException(
-          "Unable to read image dimensions.",
-          HttpStatus.BAD_REQUEST
-      );
-  }
+//   if (!metadata.width || !metadata.height) {
+//       throw new HttpException(
+//           "Unable to read image dimensions.",
+//           HttpStatus.BAD_REQUEST
+//       );
+//   }
 
-  let width = metadata.width; 
+//   let width = metadata.width; 
 
-  // Iteratively resize the image until it meets the size requirement
-  while (buffer.length > maxSize) {
-      width = Math.floor(width * 0.9); // Reduce width by 10%
-      buffer = await sharp(filePath)
-          .resize({ width })
-          .toBuffer(); 
+//   // Iteratively resize the image until it meets the size requirement
+//   while (buffer.length > maxSize) {
+//       width = Math.floor(width * 0.9); // Reduce width by 10%
+//       buffer = await sharp(filePath)
+//           .resize({ width })
+//           .toBuffer(); 
 
-      // Stop resizing if width becomes unreasonably small
-      if (width < 100) {
-          throw new HttpException(
-              "Cannot reduce image to the desired size without significant quality loss.",
-              HttpStatus.BAD_REQUEST
-          );
-      }
-  }
+//       // Stop resizing if width becomes unreasonably small
+//       if (width < 100) {
+//           throw new HttpException(
+//               "Cannot reduce image to the desired size without significant quality loss.",
+//               HttpStatus.BAD_REQUEST
+//           );
+//       }
+//   }
 
-  return buffer;
-}
+//   return buffer;
+// }
 
   @Post("upload_document")
   @ApiConsumes("multipart/form-data")
@@ -214,9 +213,54 @@ private async compressImageToMaxSize(filePath: string, maxSize: number): Promise
       limits: { fileSize: 5 * 1024 * 1024 }
     })
   )
+  // async uploadDocument(@Body() body: uploadDoucumentDto, @UploadedFiles() files: Express.Multer.File[]) {
+  //   try {
+  //     console.log(files, "files");
+  //     if (!files) {
+  //       throw new HttpException("No file uploaded.", HttpStatus.BAD_REQUEST);
+  //     }
+  //     const userDetails = await this.userService.getUserById(body.id);
+  //     if (!userDetails) {
+  //       throw new HttpException("User not found", HttpStatus.NOT_FOUND);
+  //     }
+  //     const documents = [];
+  //     for (const doc of files) {
+  //       let docType = "";
+  //       switch (doc.fieldname) {
+  //         case "aadharCard":
+  //           docType = "aadharCard";
+  //           break;
+  //         case "panCard":
+  //           docType = "panCard";
+  //           break;
+  //         case "passport":
+  //           docType = "passport";
+  //           break;
+  //         default:
+  //           docType = "unknown document";
+  //       }
+  //       const filename = doc.filename;
+  //       const userId = body.id;
+  //       const title = docType;
+  //       const username = userDetails.userName;
+  //       const fieldname = doc.fieldname;
+  //       documents.push({ userId, title, filename, username, fieldname });
+  //     }
+
+  //     await this.userService.UploadDocument(documents);
+  //     return { message: "Document uploaded successfully", data: documents };
+  //   } catch (error) {
+  //     console.log(error);
+  //     throw new HttpException(
+  //       { message: "Failed to upload document", error: error.message },
+  //       HttpStatus.INTERNAL_SERVER_ERROR
+  //     );
+  //   }
+  // }
+
   async uploadDocument(@Body() body: uploadDoucumentDto, @UploadedFiles() files: Express.Multer.File[]) {
     try {
-      console.log(files, "files");
+
       if (!files) {
         throw new HttpException("No file uploaded.", HttpStatus.BAD_REQUEST);
       }
@@ -224,8 +268,23 @@ private async compressImageToMaxSize(filePath: string, maxSize: number): Promise
       if (!userDetails) {
         throw new HttpException("User not found", HttpStatus.NOT_FOUND);
       }
-      const documents = [];
-      for (const doc of files) {
+
+      const compressedFiles = [];
+    for (const file of files) {
+      const filePath = file.path; // Original file path
+      const compressedBuffer = await compressImageToMaxSize(filePath, 250 * 1024);
+
+      // Save the compressed file back to disk
+      const compressedFilePath = filePath; // Replace original file
+      fs.writeFileSync(compressedFilePath, compressedBuffer);
+
+      compressedFiles.push({
+        ...file,
+        path: compressedFilePath,
+        size: compressedBuffer.length,
+      });
+    }
+         const documents = compressedFiles.map((doc) => {
         let docType = "";
         switch (doc.fieldname) {
           case "aadharCard":
@@ -240,13 +299,14 @@ private async compressImageToMaxSize(filePath: string, maxSize: number): Promise
           default:
             docType = "unknown document";
         }
-        const filename = doc.filename;
-        const userId = body.id;
-        const title = docType;
-        const username = userDetails.userName;
-        const fieldname = doc.fieldname;
-        documents.push({ userId, title, filename, username, fieldname });
-      }
+        return {
+          userId: body.id,
+          title: docType,
+          filename: doc.filename,
+          username: userDetails.userName,
+          fieldname: doc.fieldname,
+        };
+      });
 
       await this.userService.UploadDocument(documents);
       return { message: "Document uploaded successfully", data: documents };

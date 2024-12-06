@@ -4,12 +4,13 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { ValidationPipe } from "@nestjs/common";
 import * as path from "path";
 import * as express from "express";
+import * as cookieParser from 'cookie-parser';
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { existsSync, mkdirSync } from "fs";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-
+  app.use(cookieParser())
   //Swagger setup
   const config = new DocumentBuilder()
     .setTitle("NestJS Prisma Postgres")
