@@ -1,7 +1,7 @@
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
-import { ValidationPipe } from "@nestjs/common";
+import { Logger, ValidationPipe } from "@nestjs/common";
 import * as path from "path";
 import * as express from "express";
 import * as cookieParser from 'cookie-parser';
@@ -26,10 +26,10 @@ async function bootstrap() {
   if (!existsSync(uploadDir)) {
     mkdirSync(uploadDir, { recursive: true });
   }
-  // app.useStaticAssets(join(__dirname, "..", "uploads"), {
-  //   prefix: "/uploads/"
-  // });
+
   app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3000, () =>
+    Logger.log(`Application is running on port ${process.env.PORT ?? 3000}`)
+  );
 }
 bootstrap();

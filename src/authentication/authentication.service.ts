@@ -1,4 +1,4 @@
-import { Injectable, HttpException, HttpStatus, Res } from "@nestjs/common";
+import { Injectable, HttpException, HttpStatus, Res,  } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service"; // Replace with your PrismaService path
 import { LoginDto, RegisterUserDto, ResetPasswordDto } from "./dto/create-authentication.dto"; // Replace with the actual path to your DTO
 import { JwtService } from "@nestjs/jwt";
@@ -139,7 +139,7 @@ export class AuthenticationService {
     const { accessToken, refreshToken } = await this.generateTokens(user.id);
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { refreshToken }
+      data: { refreshToken, accessToken }
     });
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
@@ -153,6 +153,65 @@ export class AuthenticationService {
   }
   
 
+ 
+
+  async refreshTokens(refreshToken: string, accessToken: string): Promise<{ accessToken: string; refreshToken: string }> {
+    try {
+      // Verify the refresh token
+      const refreshPayload = this.jwtService.verify(refreshToken, {
+        secret: process.env.JWT_REFRESH_SECRET,
+      });
+  // console.log(refreshPayload,"refreshPayload-164-service");
+  
+      const userId = refreshPayload.userId;
+  
+      // Validate the refresh token against the database (using the User model)
+      const storedUser = await this.prisma.User.findUnique({
+        where: { id: userId },
+      });
+
+  
+      if (!storedUser || storedUser.refreshToken !== refreshToken) {
+        throw new HttpException('Invalid or expired refresh token', HttpStatus.UNAUTHORIZED);
+      }
+  
+      // Decode the access token without verifying (to check its expiry)
+      const decodedAccessToken = this.jwtService.decode(accessToken) as any;
+  
+      if (!decodedAccessToken) {
+        throw new HttpException('Invalid access token', HttpStatus.UNAUTHORIZED);
+      }
+  
+      const expiryTime = decodedAccessToken.exp * 1000; // Convert to milliseconds
+      const currentTime = Date.now();
+  console.log(expiryTime > currentTime, "expiryTime > currentTime");
+  
+      // If the access token is still valid, return it along with the same refreshToken
+      if (expiryTime > currentTime) {
+        return { accessToken, refreshToken: storedUser.refreshToken }; // Return the same refresh token
+      }
+  console.log(userId, "userId-200");
+  
+      // Generate new access and refresh tokens if access token is expired
+      const tokens = await this.generateTokens(userId);
+  console.log(tokens, "tokens-206");
+  
+      // Update the refresh token in the database
+      await this.prisma.User.update({
+        where: { id: userId },
+        data: {
+          refreshToken: tokens.refreshToken,
+          accessToken: tokens.accessToken,
+        },
+      });
+  
+      return tokens; // Return new tokens
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to refresh tokens', HttpStatus.UNAUTHORIZED);
+    }
+  }
+  
+  
   private async generateTokens(userId: string) {
     const payload = { userId };
 
@@ -167,22 +226,6 @@ export class AuthenticationService {
     });
 
     return { accessToken, refreshToken };
-  }
-
-  async refreshTokens(refreshToken: string) {
-    try {
-      const payload = await this.jwtService.verify(refreshToken, {
-        secret: process.env.JWT_REFRESH_SECRET
-      });
-
-      const userId = payload.userId;
-      const tokens = await this.generateTokens(userId);
-
-      return { ...tokens };
-    } catch (error) {
-      console.log(error);
-      throw new HttpException("Invalid refresh token." + error, HttpStatus.UNAUTHORIZED);
-    }
   }
   // async validationToken(refreshToken: string) {
   //   try {

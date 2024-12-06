@@ -1,9 +1,10 @@
-import { Controller, Post, Body, HttpStatus, HttpCode, Req, HttpException, Res } from "@nestjs/common";
+import { Controller, Post, Body, HttpStatus, HttpCode, Req, HttpException, Res, UseGuards } from "@nestjs/common";
 import { AuthenticationService } from "./authentication.service";
-import { LoginDto, RefreshTokenDto, RegisterUserDto, ResetPasswordDto } from "./dto/create-authentication.dto";
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse } from "@nestjs/swagger";
-import { decodeToken, extractTokenFromHeader } from "src/utils/common.services";
+import { LoginDto,  RegisterUserDto, ResetPasswordDto } from "./dto/create-authentication.dto";
+import {  ApiBody, ApiOperation, ApiResponse } from "@nestjs/swagger";
+import { extractTokenFromHeader } from "src/utils/common.services";
 import { Request, Response } from "express";
+import { RefreshTokenGuard } from "src/guards/refreshToken_guards";
 
 @Controller("authentication")
 export class AuthenticationController {
@@ -40,52 +41,54 @@ export class AuthenticationController {
    return res.status(HttpStatus.OK).json(result);  
   }
 
-  @Post("refresh-token")
-@ApiBearerAuth()
-@HttpCode(HttpStatus.OK)
-@ApiOperation({ summary: "Refresh access token" })
-@ApiBody({
-  description: "Refresh token",
-  type: RefreshTokenDto,
-})
-@ApiResponse({ status: HttpStatus.OK, description: "Access token refreshed successfully" })
-@ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: "Invalid refresh token" })
-async refreshTokens(@Body() refreshTokenDto: RefreshTokenDto, @Req() req: Request) {
-  try {
-    const accessToken = extractTokenFromHeader(req);
+  @Post('refresh-token')
+  @HttpCode(HttpStatus.OK)
+@UseGuards(RefreshTokenGuard)
+  @ApiOperation({ summary: 'Refresh access token' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Access token refreshed successfully',
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Invalid or expired refresh token',
+  })
+  async refreshTokens(@Req() req: Request, @Res() res: Response) {
+    try {
+      // Extract refreshToken from cookies
+      const refreshToken = req.cookies.refreshToken;
+  // console.log(refreshToken,"refreshToken-59");
+  
+      if (!refreshToken) {
+        throw new HttpException('No refresh token found in cookies', HttpStatus.UNAUTHORIZED);
+      }
+  
+      // Extract accessToken from the Authorization header
+      const accessToken = await extractTokenFromHeader(req);
+  
+      // Delegate token refresh logic to the service
+      const refreshedTokens = await this.authenticationService.refreshTokens(refreshToken, accessToken);
 
-    if (!accessToken) {
-      throw new HttpException("Access token not found in request headers", HttpStatus.UNAUTHORIZED);
+
+      // Check if a new refreshToken is provided
+      if (refreshedTokens.refreshToken) {
+        // Set the new refreshToken in the cookies
+        res.cookie('refreshToken', refreshedTokens.refreshToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        });
+      }
+  
+      return res.json(refreshedTokens); // Send new tokens as JSON response
+    } catch (error) {
+      console.error('Error refreshing tokens:', error.message);
+      throw new HttpException(error.message, error.status || HttpStatus.INTERNAL_SERVER_ERROR);
     }
-
-    // Decode the access token
-    const decoded = decodeToken(accessToken);
-    const expiryTime = decoded.exp * 1000; // Convert to milliseconds
-    const currentTime = Date.now();
-
-    if (expiryTime > currentTime) {
-      // Access token is still valid
-      return { message: "Access token is still valid", accessToken };
-    }
-
-    // Check refresh token validity
-    const refreshedTokens = await this.authenticationService.refreshTokens(refreshTokenDto.refreshToken);
-
-    if (!refreshedTokens) {
-      throw new HttpException("Invalid or expired refresh token", HttpStatus.UNAUTHORIZED);
-    }
-
-    return refreshedTokens; // Return the new tokens
-  } catch (error) {
-    console.error("Error during token refresh:", error.message);
-
-    if (error instanceof HttpException) {
-      throw error; // Re-throw for proper HTTP response
-    }
-
-    throw new HttpException("Failed to refresh tokens", HttpStatus.INTERNAL_SERVER_ERROR);
   }
-}
+  
+
 
   
 
