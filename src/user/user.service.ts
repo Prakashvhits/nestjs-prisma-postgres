@@ -70,6 +70,8 @@ export class UserService {
       if (!user) {
         throw new HttpException("User not found.", HttpStatus.NOT_FOUND);
       }
+console.log(profileImage,"profileImage");
+
 
       const updatedUser = await this.prisma.user.update({
         where: { id: id },

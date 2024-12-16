@@ -1,8 +1,11 @@
 import { HttpException, HttpStatus } from "@nestjs/common";
 import * as bcrypt from "bcrypt";
 import * as jwt from "jsonwebtoken";
+import * as fs from "fs";
+import * as crypto from 'crypto';
 import { Request } from 'express';
 import * as sharp from "sharp";
+// import * as path from "path";
 
 export async function hashPassword(password: string): Promise<string> {
   const saltRounds = 10;
@@ -67,4 +70,38 @@ export async function compressImageToMaxSize(filePath: string, maxSize: number):
   }
 
   return buffer;
+}
+
+const ALGORITHM = "aes-256-cbc";
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+
+export async function encryptFile(inputPath: string, outputPath: string): Promise<void> {
+  
+  const iv = crypto.randomBytes(16); 
+
+  const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
+
+  const input = fs.createReadStream(inputPath);
+  const output = fs.createWriteStream(outputPath);
+
+
+  
+  output.write(iv); 
+
+  input.pipe(cipher).pipe(output);
+
+}
+
+// Decrypt the file
+export function decryptFile(inputPath: string, outputPath: string): void {
+  const input = fs.createReadStream(inputPath);
+  const output = fs.createWriteStream(outputPath);
+
+  input.once('data', (data) => {
+    const iv = data.slice(0, 16); // Extract IV from the start of the file
+    const decipher = crypto.createDecipheriv(process.env.ALGORITHM, Buffer.from(process.env.ENCRYPTION_KEY, 'utf-8'), iv);
+
+    const restStream = input.pipe(decipher);
+    restStream.pipe(output);
+  });
 }

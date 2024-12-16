@@ -23,7 +23,7 @@ import * as fs from "fs";
 // import * as jwt from "jsonwebtoken";
 import { Request } from 'express';
 import * as dotenv from "dotenv";
-import { compressImageToMaxSize, decodeToken, extractTokenFromHeader } from "src/utils/common.services";
+import { compressImageToMaxSize, decodeToken, encryptFile, extractTokenFromHeader } from "src/utils/common.services";
 
 dotenv.config();
 @Controller("user")
@@ -33,11 +33,24 @@ export class UserController {
 
   @Post("get_all_user_details")
   @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
   @ApiOperation({ summary: "Get all user details" })
   @ApiResponse({ status: 200, description: "User details fetched successfully" })
-  async getAllUsers(@Body() body: UserDto) {
+  async getAllUsers(@Body() body: UserDto, @Req() req: Request) {
     const { filters, page = 1, limit = 10, search } = body;
 
+    const token = extractTokenFromHeader(req);   
+      const decoded = decodeToken(token);
+    const userRole = decoded?.role;
+
+
+    // Restrict access to admin only
+    if (userRole !== "admin") {
+      throw new HttpException(
+        { message: "Access denied: Admins only" },
+        HttpStatus.FORBIDDEN
+      );
+    }
     try {
       const validLimit = Math.max(limit, 1);
       const validPage = Math.max(page, 1);
@@ -113,17 +126,27 @@ export class UserController {
       }
       const outputDir = path.join(process.cwd(), "uploads");
       const filePath = path.join(outputDir, file.filename);
-      const filename = file.filename;
+        
+      // const filename = file.filename;
+      const encryptedFilePath = path.join(outputDir, `enc_${file.filename}`);
       // const compressedImageBuffer = await sharp(file.path).resize(200, 200).toBuffer();
       const compressedImageBuffer = await compressImageToMaxSize(file.path, 250 * 1024);
       fs.writeFileSync(filePath, compressedImageBuffer);
+
+  
+      await encryptFile(filePath, encryptedFilePath);
+      const encryptedFileName = path.basename(encryptedFilePath);
+ 
+      
       const token = extractTokenFromHeader(req);   
       const decoded = decodeToken(token);
         
       const userId = decoded.userId;
       const id = userId;
-      // const id = body.id;
-      return await this.userService.uploadProfileImage(id, filename);
+     
+const response = await this.userService.uploadProfileImage(id, encryptedFileName);
+      fs.unlinkSync(filePath);
+      return response;
     } catch (error) {
       console.log(error);
       throw new HttpException(
@@ -275,7 +298,7 @@ export class UserController {
       const compressedBuffer = await compressImageToMaxSize(filePath, 250 * 1024);
 
       // Save the compressed file back to disk
-      const compressedFilePath = filePath; // Replace original file
+      const compressedFilePath = filePath; 
       fs.writeFileSync(compressedFilePath, compressedBuffer);
 
       compressedFiles.push({

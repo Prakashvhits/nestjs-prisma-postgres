@@ -15,7 +15,7 @@ export class AuthenticationController {
   @ApiOperation({ summary: "Create a new user" })
   @ApiResponse({ status: 201, description: "User created successfully" })
   @ApiResponse({ status: 400, description: "Bad request" })
-  create(@Body() createAuthenticationDto: RegisterUserDto) {
+  createUser(@Body() createAuthenticationDto: RegisterUserDto) {
     return this.authenticationService.createUser(createAuthenticationDto);
   }
   @Post('login')
@@ -41,6 +41,12 @@ export class AuthenticationController {
    return res.status(HttpStatus.OK).json(result);  
   }
 
+@Post ('otpGenrate')
+@HttpCode(HttpStatus.OK)
+  async otpGenrate(@Body() loginInput: LoginDto, @Res() res: Response): Promise<any> {
+    const result = await this.authenticationService.otpGenrate(loginInput);
+   return res.status(HttpStatus.OK).json(result);
+  }
   @Post('refresh-token')
   @HttpCode(HttpStatus.OK)
 @UseGuards(RefreshTokenGuard)

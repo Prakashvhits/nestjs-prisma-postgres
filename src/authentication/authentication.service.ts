@@ -12,147 +12,303 @@ export class AuthenticationService {
     private readonly jwtService: JwtService
   ) {}
 
+  // async createUser(payload: RegisterUserDto): Promise<any> {
+  //   const { id, userName, email, password, phoneNumber, fullName } = payload;
+
+  //   // Validate required fields
+  //   if (!userName || !email || !password || !phoneNumber) {
+  //     throw new HttpException(
+  //       "All fields (userName, email, password, phoneNumber) are required.",
+  //       HttpStatus.BAD_REQUEST
+  //     );
+  //   }
+
+  //   // Check for existing user conflicts
+  //   const existingUser = await this.prisma.user.findFirst({
+  //     where: {
+  //       OR: [{ userName }, { email }, { phoneNumber }]
+  //     }
+  //   });
+
+  //   if (existingUser && !existingUser === null) {
+  //     const conflictField =
+  //       existingUser.userName === userName
+  //         ? "User name"
+  //         : existingUser.email === email
+  //           ? "Email address"
+  //           : "Phone number";
+
+  //     throw new HttpException(`${conflictField} already exists.`, HttpStatus.CONFLICT);
+  //   }
+
+  //   // Encrypt the password
+  //   const encryptedPassword = await hashPassword(password);
+
+  //   if (id) {  
+  //     console.log("payloadUpdate",payload);
+  //     return this.updateUser(id, { ...payload, password: encryptedPassword });
+  //   } else {
+  //     console.log("payloadCreate",payload);
+      
+  //     // Create a new user
+  //     return this.prisma.user.create({
+  //       data: {
+  //         userName,
+  //         email,
+  //         password: encryptedPassword,
+  //         phoneNumber,
+  //         fullName
+  //       }
+  //     });
+  //   }
+  // }
+
+  // private async updateUser(id: string, payload: RegisterUserDto): Promise<any> {
+  //   const { userName, email, password, phoneNumber } = payload;
+  // console.log("payload",payload);
+  
+  //   // Find the user to be updated
+  //   const existingUser = await this.prisma.user.findUnique({ where: { id } });
+  
+  //   if (!existingUser) {
+  //     throw new HttpException("User not found.", HttpStatus.NOT_FOUND);
+  //   }
+  
+  //   // Check for conflicts with other users
+  //   const conflictingUser = await this.prisma.user.findFirst({
+  //     where: {
+  //       AND: [
+  //         { id: { not: id } }, // Exclude the current user
+  //         {
+  //           OR: [
+  //             userName ? { userName } : undefined,
+  //             email ? { email } : undefined,
+  //             phoneNumber ? { phoneNumber } : undefined
+  //           ]
+  //         }
+  //       ]
+  //     }
+  //   });
+  
+  //   if (conflictingUser) {
+  //     const conflictField =
+  //       conflictingUser.userName === userName
+  //         ? "User name"
+  //         : conflictingUser.email === email
+  //         ? "Email address"
+  //         : "Phone number";
+  
+  //     throw new HttpException(`${conflictField} already exists.`, HttpStatus.CONFLICT);
+  //   }
+  
+  //   // Encrypt the password if provided
+  //   let encryptedPassword = undefined;
+  //   if (password) {
+  //     encryptedPassword = await hashPassword(password);
+  //   }
+  
+  //   // Prepare the updated data
+  //   const updatedData: any = {
+  //     ...(userName && { userName }),
+  //     ...(email && { email }),
+  //     ...(encryptedPassword && { password: encryptedPassword }),
+  //     ...(phoneNumber && { phoneNumber })
+  //   };
+  
+  //   // Only update fields that are provided (excluding undefined ones)
+  //   return this.prisma.user.update({
+  //     where: { id },
+  //     data: updatedData
+  //   });
+  // }
+  
   async createUser(payload: RegisterUserDto): Promise<any> {
     const { id, userName, email, password, phoneNumber, fullName } = payload;
 
-    // Validate required fields
-    if (!userName || !email || !password || !phoneNumber) {
-      throw new HttpException(
-        "All fields (userName, email, password, phoneNumber) are required.",
-        HttpStatus.BAD_REQUEST
-      );
+  
+    // Handle Create or Update
+    if (id) {
+      console.log("payloadUpdate",payload);
+      
+      // Update existing user
+      return this.updateUser(id, payload);
     }
-
-    // Check for existing user conflicts
+  
+    // Validation for user creation
+    // if (!userName || !email || !password || !phoneNumber || !fullName) {
+    //   throw new HttpException(
+    //     "All fields (userName, email, password, phoneNumber, fullName) are required.",
+    //     HttpStatus.BAD_REQUEST
+    //   );
+    // }
+  
+    // Check for existing conflicts during creation
     const existingUser = await this.prisma.user.findFirst({
       where: {
         OR: [{ userName }, { email }, { phoneNumber }]
       }
     });
-
+  
     if (existingUser) {
       const conflictField =
         existingUser.userName === userName
           ? "User name"
           : existingUser.email === email
-            ? "Email address"
-            : "Phone number";
-
+          ? "Email address"
+          : "Phone number";
+  
       throw new HttpException(`${conflictField} already exists.`, HttpStatus.CONFLICT);
     }
-
+  
     // Encrypt the password
     const encryptedPassword = await hashPassword(password);
-
-    if (id) {
-      return this.updateUser(id, { ...payload, password: encryptedPassword });
-    } else {
-      // Create a new user
-      return this.prisma.user.create({
-        data: {
-          userName,
-          email,
-          password: encryptedPassword,
-          phoneNumber,
-          fullName
-        }
-      });
-    }
+  
+    // Create the new user
+    return this.prisma.user.create({
+      data: {
+        userName,
+        email,
+        password: encryptedPassword,
+        phoneNumber,
+        fullName
+      }
+    });
   }
-
+  
   private async updateUser(id: string, payload: RegisterUserDto): Promise<any> {
-    const { userName, email, password, phoneNumber } = payload;
-
+    const { userName, email, password, phoneNumber,role } = payload;
+    console.log("payload", payload);
+  
     // Find the user to be updated
     const existingUser = await this.prisma.user.findUnique({ where: { id } });
+  
     if (!existingUser) {
       throw new HttpException("User not found.", HttpStatus.NOT_FOUND);
     }
-
+  
+    // Build the OR condition dynamically
+    const orConditions = [
+      userName ? { userName } : null,
+      email ? { email } : null,
+      phoneNumber ? { phoneNumber } : null,
+    ].filter(Boolean); // Filter out null or undefined values
+  
     // Check for conflicts with other users
-    const conflictingUser = await this.prisma.user.findFirst({
-      where: {
-        AND: [
-          { id: { not: id } }, // Exclude the current user
-          {
-            OR: [
-              userName ? { userName } : undefined,
-              email ? { email } : undefined,
-              phoneNumber ? { phoneNumber } : undefined
-            ]
-          }
-        ]
-      }
-    });
-
-    if (conflictingUser) {
-      const conflictField =
-        conflictingUser.userName === userName
-          ? "User name"
-          : conflictingUser.email === email
+    if (orConditions.length > 0) {
+      const conflictingUser = await this.prisma.user.findFirst({
+        where: {
+          AND: [
+            { id: { not: id } }, // Exclude the current user
+            { OR: orConditions },
+          ],
+        },
+      });
+  
+      if (conflictingUser) {
+        const conflictField =
+          conflictingUser.userName === userName
+            ? "User name"
+            : conflictingUser.email === email
             ? "Email address"
             : "Phone number";
-
-      throw new HttpException(`${conflictField} already exists.`, HttpStatus.CONFLICT);
+  
+        throw new HttpException(`${conflictField} already exists.`, HttpStatus.CONFLICT);
+      }
     }
-
+  
     // Encrypt the password if provided
-    let encryptedPassword = undefined;
-    if (password) {
-      encryptedPassword = await hashPassword(password);
-    }
-
-    // Update user with provided fields
+    const encryptedPassword = password ? await hashPassword(password) : undefined;
+  
+    // Prepare the updated data
     const updatedData: any = {
       ...(userName && { userName }),
       ...(email && { email }),
       ...(encryptedPassword && { password: encryptedPassword }),
-      ...(phoneNumber && { phoneNumber })
+      ...(phoneNumber && { phoneNumber }),
+      ...(role && { role })
     };
-
+  
+    // Update the user with the provided data
     return this.prisma.user.update({
       where: { id },
-      data: updatedData
+      data: updatedData,
     });
   }
+  
+  
+  
 
   async loginUser(loginInput: LoginDto, @Res() res: Response): Promise<any> {
-    const { identifier, password } = loginInput;
-
+    const { identifier, password, otp } = loginInput;
+  
+    // Find user by email, username, or phone
+    const findUser = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ email: identifier }, { userName: identifier }, { phoneNumber: identifier }]
+      }
+    });
+  
+    if (!findUser) {
+      throw new HttpException("User not found.", HttpStatus.NOT_FOUND);
+    }
+  
+    // If OTP is provided, check it
+    if (otp ) {
+      console.log("otp",otp);
+      if (!findUser.otp || findUser.otp !== otp) {
+        throw new HttpException("Invalid OTP.", HttpStatus.UNAUTHORIZED);
+      }
+    } else if (password && password.trim() !== "") { 
+     console.log("password",password);
+     
+      const isPasswordValid = await comparePassword(password, findUser.password);
+      if (!isPasswordValid) {
+        throw new HttpException("Invalid password.", HttpStatus.UNAUTHORIZED);
+      }
+    }
+  
+    // Generate access and refresh tokens
+    const { accessToken, refreshToken } = await this.generateTokens(findUser.id,findUser.role);
+    await this.prisma.user.update({
+      where: { id: findUser.id },
+      data: { refreshToken, accessToken, otp: null }
+    });
+  
+    // Set the refresh token in the response cookie
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+  
+    return { accessToken, refreshToken };
+  }
+  
+  
+  
+  async otpGenrate(loginInput: LoginDto): Promise<any> {
+    const { identifier } = loginInput;
+  
     // Find user by email, username, or phone
     const user = await this.prisma.user.findFirst({
       where: {
         OR: [{ email: identifier }, { userName: identifier }, { phoneNumber: identifier }]
       }
     });
+  
     if (!user) {
       throw new HttpException("User not found.", HttpStatus.NOT_FOUND);
     }
-
-    // Verify password
-    const isPasswordValid = await comparePassword(password, user.password);
-    if (!isPasswordValid) {
-      throw new HttpException("Invalid password.", HttpStatus.UNAUTHORIZED);
-    }
-
-    // Generate access and refresh tokens
-    const { accessToken, refreshToken } = await this.generateTokens(user.id);
+  
+    // Generate otp
+    const otpGenerate = "4444"; // OTP should be a string
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { refreshToken, accessToken }
+      data: { otp: otpGenerate }
     });
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', 
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    });
-
-    // return { accessToken };
-    return { accessToken, refreshToken };
   }
   
-
  
 
   async refreshTokens(refreshToken: string, accessToken: string): Promise<{ accessToken: string; refreshToken: string }> {
@@ -193,7 +349,7 @@ export class AuthenticationService {
   console.log(userId, "userId-200");
   
       // Generate new access and refresh tokens if access token is expired
-      const tokens = await this.generateTokens(userId);
+      const tokens = await this.generateTokens(userId,storedUser.role);
   console.log(tokens, "tokens-206");
   
       // Update the refresh token in the database
@@ -212,12 +368,12 @@ export class AuthenticationService {
   }
   
   
-  private async generateTokens(userId: string) {
-    const payload = { userId };
+  private async generateTokens(userId: string,role?:string) {
+    const payload = { userId,role };
 
     const accessToken = this.jwtService.sign(payload, {
       secret: process.env.JWT_ACCESS_SECRET,
-      expiresIn: "1m"
+      expiresIn: "1d"
     });
 
     const refreshToken = this.jwtService.sign(payload, {
